@@ -1,5 +1,5 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-(function (global){
+(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+(function (global){(function (){
 var L = (typeof window !== "undefined" ? window['L'] : typeof global !== "undefined" ? global['L'] : null)
 var fetchJsonp = require('fetch-jsonp')
 var bboxIntersect = require('bbox-intersect')
@@ -74,8 +74,8 @@ L.TileLayer.Bing = L.TileLayer.extend({
   },
 
   statics: {
-    METADATA_URL: 'https://dev.virtualearth.net/REST/v1/Imagery/Metadata/{imagerySet}?key={bingMapsKey}&include=ImageryProviders&uriScheme=https',
-    POINT_METADATA_URL: 'https://dev.virtualearth.net/REST/v1/Imagery/Metadata/{imagerySet}/{lat},{lng}?zl={z}&key={bingMapsKey}&uriScheme=https'
+    METADATA_URL: 'https://dev.virtualearth.net/REST/v1/Imagery/Metadata/{imagerySet}?key={bingMapsKey}&include=ImageryProviders&uriScheme=https&c={culture}',
+    POINT_METADATA_URL: 'https://dev.virtualearth.net/REST/v1/Imagery/Metadata/{imagerySet}/{lat},{lng}?zl={z}&key={bingMapsKey}&uriScheme=https&c={culture}'
   },
 
   initialize: function (options) {
@@ -99,7 +99,8 @@ L.TileLayer.Bing = L.TileLayer.extend({
 
     var metaDataUrl = L.Util.template(L.TileLayer.Bing.METADATA_URL, {
       bingMapsKey: this.options.bingMapsKey,
-      imagerySet: this.options.imagerySet
+      imagerySet: this.options.imagerySet,
+      culture: this.options.culture
     })
 
     this._imageryProviders = []
@@ -155,7 +156,8 @@ L.TileLayer.Bing = L.TileLayer.extend({
     var url = L.Util.template(this._url, {
       quadkey: quadkey,
       subdomain: this._getSubdomain(coords),
-      culture: this.options.culture
+      culture: this.options.culture,
+      token: this.options.bingMapsKey
     })
     if (typeof this.options.style === 'string') {
       url += '&st=' + this.options.style
@@ -276,7 +278,7 @@ L.tileLayer.bing = function (options) {
 
 module.exports = L.TileLayer.Bing
 
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+}).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"bbox-intersect":2,"fetch-jsonp":3}],2:[function(require,module,exports){
 module.exports = function(bbox1, bbox2){
   if(!(
@@ -316,7 +318,6 @@ module.exports = function(bbox1, bbox2){
     return 'jsonp_' + Date.now() + '_' + Math.ceil(Math.random() * 100000);
   }
 
-  // Known issue: Will throw 'Uncaught ReferenceError: callback_*** is not defined' error if request timeout
   function clearFunction(functionName) {
     // IE8 throws an exception when you try to delete a property on window
     // http://stackoverflow.com/a/1824228/751089
@@ -329,19 +330,24 @@ module.exports = function(bbox1, bbox2){
 
   function removeScript(scriptId) {
     var script = document.getElementById(scriptId);
-    document.getElementsByTagName('head')[0].removeChild(script);
+    if (script) {
+      document.getElementsByTagName('head')[0].removeChild(script);
+    }
   }
 
-  var fetchJsonp = function fetchJsonp(url) {
-    var options = arguments[1] === undefined ? {} : arguments[1];
+  function fetchJsonp(_url) {
+    var options = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
 
-    var timeout = options.timeout != null ? options.timeout : defaultOptions.timeout;
-    var jsonpCallback = options.jsonpCallback != null ? options.jsonpCallback : defaultOptions.jsonpCallback;
+    // to avoid param reassign
+    var url = _url;
+    var timeout = options.timeout || defaultOptions.timeout;
+    var jsonpCallback = options.jsonpCallback || defaultOptions.jsonpCallback;
 
     var timeoutId = undefined;
 
     return new Promise(function (resolve, reject) {
       var callbackFunction = options.jsonpCallbackFunction || generateCallbackFunction();
+      var scriptId = jsonpCallback + '_' + callbackFunction;
 
       window[callbackFunction] = function (response) {
         resolve({
@@ -354,7 +360,7 @@ module.exports = function(bbox1, bbox2){
 
         if (timeoutId) clearTimeout(timeoutId);
 
-        removeScript(jsonpCallback + '_' + callbackFunction);
+        removeScript(scriptId);
 
         clearFunction(callbackFunction);
       };
@@ -363,18 +369,42 @@ module.exports = function(bbox1, bbox2){
       url += url.indexOf('?') === -1 ? '?' : '&';
 
       var jsonpScript = document.createElement('script');
-      jsonpScript.setAttribute('src', url + jsonpCallback + '=' + callbackFunction);
-      jsonpScript.id = jsonpCallback + '_' + callbackFunction;
+      jsonpScript.setAttribute('src', '' + url + jsonpCallback + '=' + callbackFunction);
+      if (options.charset) {
+        jsonpScript.setAttribute('charset', options.charset);
+      }
+      if (options.nonce) {
+        jsonpScript.setAttribute('nonce', options.nonce);
+      }
+      if (options.referrerPolicy) {
+        jsonpScript.setAttribute('referrerPolicy', options.referrerPolicy);
+      }
+      if (options.crossorigin) {
+        jsonpScript.setAttribute('crossorigin', 'true');
+      }
+      jsonpScript.id = scriptId;
       document.getElementsByTagName('head')[0].appendChild(jsonpScript);
 
       timeoutId = setTimeout(function () {
-        reject(new Error('JSONP request to ' + url + ' timed out'));
+        reject(new Error('JSONP request to ' + _url + ' timed out'));
 
         clearFunction(callbackFunction);
-        removeScript(jsonpCallback + '_' + callbackFunction);
+        removeScript(scriptId);
+        window[callbackFunction] = function () {
+          clearFunction(callbackFunction);
+        };
       }, timeout);
+
+      // Caught if got 404/500
+      jsonpScript.onerror = function () {
+        reject(new Error('JSONP request to ' + _url + ' failed'));
+
+        clearFunction(callbackFunction);
+        removeScript(scriptId);
+        if (timeoutId) clearTimeout(timeoutId);
+      };
     });
-  };
+  }
 
   // export as global function
   /*
@@ -390,7 +420,6 @@ module.exports = function(bbox1, bbox2){
       throw new Error('polyfill failed because global object is unavailable in this environment');
     }
   }
-  
   local.fetchJsonp = fetchJsonp;
   */
 
