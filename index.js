@@ -154,7 +154,8 @@ L.TileLayer.Bing = L.TileLayer.extend({
     var url = L.Util.template(this._url, {
       quadkey: quadkey,
       subdomain: this._getSubdomain(coords),
-      culture: this.options.culture
+      culture: this.options.culture,
+      token: this.options.bingMapsKey
     })
     if (typeof this.options.style === 'string') {
       url += '&st=' + this.options.style
